@@ -84,6 +84,20 @@ create table if not exists public.expenses (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.recurring_expenses (
+  id uuid primary key default gen_random_uuid(),
+  business_id uuid not null references public.businesses(id) on delete cascade,
+  description text not null,
+  amount numeric(12,2) not null default 0,
+  category text not null default 'Other',
+  frequency text not null default 'monthly',
+  start_date date not null default current_date,
+  next_due_date date not null default current_date,
+  end_date date,
+  status text not null default 'active',
+  created_at timestamptz not null default now()
+);
+
 create table if not exists public.listing_actions (
   id uuid primary key default gen_random_uuid(),
   business_id uuid not null references public.businesses(id) on delete cascade,
@@ -184,6 +198,7 @@ alter table public.stock_batches enable row level security;
 alter table public.inventory_items enable row level security;
 alter table public.sales enable row level security;
 alter table public.expenses enable row level security;
+alter table public.recurring_expenses enable row level security;
 alter table public.listing_actions enable row level security;
 alter table public.notifications enable row level security;
 alter table public.platform_settings enable row level security;
@@ -212,6 +227,10 @@ create policy "expenses via business owner" on public.expenses
 for all using (exists (select 1 from public.businesses b where b.id = business_id and b.user_id = auth.uid()))
 with check (exists (select 1 from public.businesses b where b.id = business_id and b.user_id = auth.uid()));
 
+create policy "recurring expenses via business owner" on public.recurring_expenses
+for all using (exists (select 1 from public.businesses b where b.id = business_id and b.user_id = auth.uid()))
+with check (exists (select 1 from public.businesses b where b.id = business_id and b.user_id = auth.uid()));
+
 create policy "listing actions via business owner" on public.listing_actions
 for all using (exists (select 1 from public.businesses b where b.id = business_id and b.user_id = auth.uid()))
 with check (exists (select 1 from public.businesses b where b.id = business_id and b.user_id = auth.uid()));
@@ -237,4 +256,5 @@ create index if not exists idx_inventory_business_id on public.inventory_items(b
 create index if not exists idx_inventory_sku on public.inventory_items(business_id, sku);
 create index if not exists idx_sales_business_id on public.sales(business_id);
 create index if not exists idx_expenses_business_id on public.expenses(business_id);
+create index if not exists idx_recurring_expenses_business_id on public.recurring_expenses(business_id);
 create index if not exists idx_notifications_business_status on public.notifications(business_id, status);
