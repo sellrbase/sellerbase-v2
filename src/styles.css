@@ -358,7 +358,7 @@ tbody tr:hover {
 
 .stat-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   gap: 12px;
 }
 
@@ -407,6 +407,15 @@ tbody tr:hover {
   padding: 16px;
   background: var(--panel-2);
   color: var(--text);
+}
+
+a.quick-card {
+  text-decoration: none;
+}
+
+.quick-card.disabled {
+  opacity: 0.45;
+  pointer-events: none;
 }
 
 .quick-card {
@@ -617,10 +626,19 @@ tbody tr:hover {
 
 .history-row {
   display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
   padding: 12px 0;
   border-bottom: 1px solid var(--line);
+}
+
+.row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .history-row:last-child {
@@ -671,6 +689,32 @@ tbody tr:hover {
 .profit-preview strong {
   color: var(--green);
   font-size: 24px;
+}
+
+.breakdown-row {
+  display: grid;
+  grid-template-columns: minmax(90px, 0.8fr) minmax(120px, 1.4fr) minmax(80px, auto);
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+}
+
+.breakdown-row span {
+  color: var(--muted);
+}
+
+.breakdown-row div {
+  height: 8px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+
+.breakdown-row i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(69, 182, 169, 0.55), var(--accent));
 }
 
 .error-box {
