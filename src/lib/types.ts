@@ -7,6 +7,13 @@ export type Business = {
   tax_region: string;
   sku_prefix: string;
   sku_start: number;
+  theme: string | null;
+  min_buy_profit: number | null;
+  min_buy_margin: number | null;
+  monthly_revenue_target: number | null;
+  monthly_profit_target: number | null;
+  monthly_sold_target: number | null;
+  monthly_listed_target: number | null;
   created_at: string;
 };
 
@@ -91,35 +98,3 @@ export type ListingAction = {
 
 export type Notification = {
   id: string;
-  business_id: string;
-  inventory_item_id: string | null;
-  title: string;
-  message: string;
-  category: string;
-  priority: string;
-  route: string | null;
-  status: string;
-  due_date: string | null;
-  snoozed_until: string | null;
-  created_at: string;
-};
-
-export type PlatformSetting = {
-  id: string;
-  business_id: string;
-  name: string;
-  fee_percent: number;
-  fixed_fee: number;
-  default_postage_cost: number;
-  default_packaging_cost: number;
-  created_at: string;
-};
-
-export type CalendarEntry = {
-  id: string;
-  business_id: string;
-  date: string;
-  text: string;
-  type: string;
-  created_at: string;
-};
