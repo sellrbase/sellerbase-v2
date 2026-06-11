@@ -1138,7 +1138,6 @@ function EditListingModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const [expenseMode, setExpenseMode] = useState("one-off");
   const [form, setForm] = useState({
     sku: item.sku || "",
     title: item.title,
@@ -1408,6 +1407,7 @@ function ExpensesPage({
   recurringExpenses: RecurringExpense[];
   onRefresh: () => void;
 }) {
+  const [expenseMode, setExpenseMode] = useState<"one-off" | "recurring">("one-off");
   const [form, setForm] = useState({
     date: today(),
     amount: "",
