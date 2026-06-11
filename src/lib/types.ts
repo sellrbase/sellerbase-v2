@@ -64,6 +64,20 @@ export type Expense = {
   created_at: string;
 };
 
+export type RecurringExpense = {
+  id: string;
+  business_id: string;
+  description: string;
+  amount: number;
+  category: string;
+  frequency: string;
+  start_date: string;
+  next_due_date: string;
+  end_date: string | null;
+  status: string;
+  created_at: string;
+};
+
 export type ListingAction = {
   id: string;
   business_id: string;
@@ -98,5 +112,14 @@ export type PlatformSetting = {
   fixed_fee: number;
   default_postage_cost: number;
   default_packaging_cost: number;
+  created_at: string;
+};
+
+export type CalendarEntry = {
+  id: string;
+  business_id: string;
+  date: string;
+  text: string;
+  type: string;
   created_at: string;
 };
