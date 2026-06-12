@@ -6,6 +6,7 @@ import {
   BarChart3,
   Boxes,
   Calculator,
+  CalendarDays,
   ChevronRight,
   CircleDollarSign,
   ClipboardList,
@@ -158,7 +159,10 @@ function Sellerbase({ session }: { session: Session }) {
     if (error) throw error;
     const rows = (data || []) as Business[];
     setBusinesses(rows);
-    setBusiness((current) => current || rows[0] || null);
+    setBusiness((current) => {
+      if (!current) return rows[0] || null;
+      return rows.find((row) => row.id === current.id) || rows[0] || null;
+    });
     setLoading(false);
   };
 
@@ -1715,24 +1719,131 @@ function AnalyticsPage({
   const manualExpenses = expenses
     .filter((expense) => expense.source !== "inventory_auto")
     .reduce((sum, expense) => sum + expense.amount, 0);
+  const netProfit = roundMoney(salesProfit - manualExpenses);
+  const totalListedValue = items.reduce((sum, item) => sum + item.quantity_available * item.list_price_each, 0);
+  const totalStockCost = items.reduce((sum, item) => sum + (item.cost_each || 0) * item.quantity_available, 0);
+  const totalUnits = items.reduce((sum, item) => sum + item.quantity_total, 0);
+  const soldUnits = activeSales.reduce((sum, sale) => sum + sale.quantity_sold, 0);
+  const averageSale = activeSales.length ? revenue / activeSales.length : 0;
+  const itemById = new Map(items.map((item) => [item.id, item]));
+  const daysToSell = activeSales
+    .map((sale) => {
+      const item = itemById.get(sale.inventory_item_id);
+      const startDate = item?.listed_at || item?.created_at;
+      if (!startDate) return null;
+      return Math.max(0, Math.round((new Date(sale.sold_at).getTime() - new Date(startDate).getTime()) / 86400000));
+    })
+    .filter((value): value is number => value !== null && Number.isFinite(value));
+  const averageDaysToSell = daysToSell.length
+    ? Math.round(daysToSell.reduce((sum, value) => sum + value, 0) / daysToSell.length)
+    : 0;
+  const staleItems = items
+    .filter((item) => item.quantity_available > 0 && item.listed_at)
+    .map((item) => ({
+      item,
+      daysListed: Math.max(0, Math.round((Date.now() - new Date(item.listed_at || item.created_at).getTime()) / 86400000)),
+      value: item.quantity_available * item.list_price_each,
+    }))
+    .filter((entry) => entry.daysListed >= 30)
+    .sort((a, b) => b.daysListed - a.daysListed);
+  const staleValue = staleItems.reduce((sum, entry) => sum + entry.value, 0);
+  const bestSales = [...activeSales]
+    .map((sale) => ({
+      sale,
+      profit: saleNetProfit({
+        soldPriceEach: sale.sold_price_each,
+        quantity: sale.quantity_sold,
+        costEach: sale.cost_each_snapshot,
+        platformFee: sale.platform_fee,
+        postageCost: sale.postage_cost,
+        packagingCost: sale.packaging_cost,
+        otherCost: sale.other_cost,
+      }),
+    }))
+    .sort((a, b) => b.profit - a.profit)
+    .slice(0, 8);
   const byPlatform = groupSum(activeSales, (sale) => sale.platform, (sale) => sale.sold_price_each * sale.quantity_sold);
+  const profitByPlatform = groupSum(activeSales, (sale) => sale.platform, (sale) =>
+    saleNetProfit({
+      soldPriceEach: sale.sold_price_each,
+      quantity: sale.quantity_sold,
+      costEach: sale.cost_each_snapshot,
+      platformFee: sale.platform_fee,
+      postageCost: sale.postage_cost,
+      packagingCost: sale.packaging_cost,
+      otherCost: sale.other_cost,
+    }),
+  );
   const byCategory = groupSum(
     items,
     (item) => item.category,
     (item) => item.quantity_available * item.list_price_each,
+  );
+  const bySource = groupSum(
+    items,
+    (item) => item.source || "Unspecified",
+    (item) => item.quantity_available * item.list_price_each,
+  );
+  const expensesByCategory = groupSum(
+    expenses.filter((expense) => expense.source !== "inventory_auto"),
+    (expense) => expense.category,
+    (expense) => expense.amount,
   );
 
   return (
     <div className="page-stack">
       <div className="stat-grid">
         <Stat label="All-time revenue" value={gbp(revenue)} icon={<CircleDollarSign />} />
-        <Stat label="Sales profit" value={gbp(salesProfit)} icon={<Calculator />} />
-        <Stat label="Business net" value={gbp(salesProfit - manualExpenses)} icon={<BarChart3 />} />
-        <Stat label="Sell-through" value={`${items.length ? Math.round((items.filter((item) => item.quantity_available === 0).length / items.length) * 100) : 0}%`} icon={<Percent />} />
+        <Stat label="Business net profit" value={gbp(netProfit)} icon={<Calculator />} />
+        <Stat label="Average sale" value={gbp(averageSale)} icon={<Receipt />} />
+        <Stat label="Sell-through" value={`${totalUnits ? Math.round((soldUnits / totalUnits) * 100) : 0}%`} icon={<Percent />} />
+        <Stat label="Active stock value" value={gbp(totalListedValue)} icon={<Boxes />} />
+        <Stat label="Active stock cost" value={gbp(totalStockCost)} icon={<ShoppingBag />} />
+        <Stat label="Average days to sell" value={`${averageDaysToSell} days`} icon={<CalendarDays />} />
+        <Stat label="Stale listed value" value={gbp(staleValue)} icon={<Bell />} />
       </div>
       <div className="split-grid">
         <BreakdownPanel title="Revenue by platform" rows={byPlatform} />
+        <BreakdownPanel title="Profit by platform" rows={profitByPlatform} />
         <BreakdownPanel title="Listed value by category" rows={byCategory} />
+        <BreakdownPanel title="Listed value by source / haul" rows={bySource} />
+        <BreakdownPanel title="Manual expenses by category" rows={expensesByCategory} />
+      </div>
+      <div className="split-grid">
+        <section className="panel">
+          <div className="section-head">
+            <div>
+              <p className="eyebrow">Performance</p>
+              <h2>Best sales</h2>
+            </div>
+          </div>
+          <div className="mini-list">
+            {bestSales.length === 0 && <p className="empty-state">No sales yet.</p>}
+            {bestSales.map(({ sale, profit }) => (
+              <div className="history-row" key={sale.id}>
+                <span>{sale.sku_snapshot || "No SKU"} - {sale.title_snapshot}</span>
+                <strong>{gbp(profit)}</strong>
+              </div>
+            ))}
+          </div>
+        </section>
+        <section className="panel">
+          <div className="section-head">
+            <div>
+              <p className="eyebrow">Stock attention</p>
+              <h2>Listed 30+ days</h2>
+            </div>
+          </div>
+          <div className="mini-list">
+            {staleItems.length === 0 && <p className="empty-state">No stale listed stock yet.</p>}
+            {staleItems.slice(0, 8).map(({ item, daysListed, value }) => (
+              <div className="history-row" key={item.id}>
+                <span>{item.sku || "No SKU"} - {item.title} - {daysListed} days</span>
+                <strong>{gbp(value)}</strong>
+              </div>
+            ))}
+          </div>
+        </section>
       </div>
     </div>
   );
@@ -1870,22 +1981,46 @@ function BuyingCalculator({
   const [sale, setSale] = useState("");
   const [postage, setPostage] = useState(String(selected?.default_postage_cost || 0));
   const [packaging, setPackaging] = useState(String(selected?.default_packaging_cost || 0));
+  const [showSetupNote, setShowSetupNote] = useState(
+    () => localStorage.getItem(`sellerbase-buying-note-${business.id}`) !== "hidden",
+  );
+  useEffect(() => {
+    setPostage(String(selected?.default_postage_cost || 0));
+    setPackaging(String(selected?.default_packaging_cost || 0));
+  }, [platform, selected?.default_packaging_cost, selected?.default_postage_cost]);
   const saleValue = Number(sale) || 0;
+  const costValue = Number(cost) || 0;
   const platformFee = roundMoney(saleValue * ((selected?.fee_percent || 0) / 100) + (selected?.fixed_fee || 0));
-  const profit = roundMoney(saleValue - (Number(cost) || 0) - platformFee - (Number(postage) || 0) - (Number(packaging) || 0));
+  const profit = roundMoney(saleValue - costValue - platformFee - (Number(postage) || 0) - (Number(packaging) || 0));
   const margin = saleValue > 0 ? Math.round((profit / saleValue) * 100) : 0;
   const minProfit = business.min_buy_profit ?? 5;
   const minMargin = business.min_buy_margin ?? 25;
-  const isReady = profit >= minProfit && margin >= minMargin;
+  const hasInputs = costValue > 0 || saleValue > 0;
+  const isReady = hasInputs && profit >= minProfit && margin >= minMargin;
+  const decisionClass = !hasInputs ? "neutral" : isReady ? "good" : "bad";
+  const decisionText = !hasInputs
+    ? "Enter a buy cost and expected sale price to check the deal."
+    : isReady
+      ? "Good buy based on your current thresholds."
+      : "Below target. Raise sale price, lower cost, or skip it.";
+  const dismissSetupNote = () => {
+    localStorage.setItem(`sellerbase-buying-note-${business.id}`, "hidden");
+    setShowSetupNote(false);
+  };
 
   return (
     <section className="panel form-panel">
       <p className="eyebrow">Buying decision</p>
       <h2>Buying calculator</h2>
-      <div className="setup-note">
-        Minimum target: {gbp(minProfit)} profit and {minMargin}% margin.
-        <button className="text-button" onClick={onOpenSettings}>Change in Settings</button>
-      </div>
+      {showSetupNote && (
+        <div className="setup-note">
+          <span>Minimum target: {gbp(minProfit)} profit and {minMargin}% margin.</span>
+          <div className="button-row compact">
+            <button className="text-button" onClick={onOpenSettings}>Change in Settings</button>
+            <button className="ghost-button" onClick={dismissSetupNote}>Done</button>
+          </div>
+        </div>
+      )}
       <div className="form-grid two">
         <SelectField label="Expected platform" value={platform} onChange={setPlatform} options={platforms.map((entry) => entry.name)} />
         <Field label="Buy cost" value={cost} onChange={setCost} type="number" />
@@ -1893,11 +2028,11 @@ function BuyingCalculator({
         <Field label="Postage cost" value={postage} onChange={setPostage} type="number" />
         <Field label="Packaging cost" value={packaging} onChange={setPackaging} type="number" />
       </div>
-      <div className="profit-preview">
+      <div className={`profit-preview ${decisionClass}`}>
         <span>Expected profit</span>
         <strong>{gbp(profit)} ({margin}%)</strong>
       </div>
-      <p className="muted">{isReady ? "Meets your buying thresholds." : "Below your buying thresholds. Raise sale price, lower cost, or skip it."}</p>
+      <p className={`decision-text ${decisionClass}`}>{decisionText}</p>
     </section>
   );
 }
@@ -1943,6 +2078,7 @@ function SettingsPage({
   sales: Sale[];
   onRefresh: () => void;
 }) {
+  const platformOrder = ["eBay", "Vinted", "Depop", "Facebook", "Other"];
   const [businessForm, setBusinessForm] = useState({
     sku_prefix: business.sku_prefix,
     sku_start: String(business.sku_start),
@@ -1954,6 +2090,20 @@ function SettingsPage({
     monthly_sold_target: business.monthly_sold_target == null ? "" : String(business.monthly_sold_target),
     monthly_listed_target: business.monthly_listed_target == null ? "" : String(business.monthly_listed_target),
   });
+  const [saveMessage, setSaveMessage] = useState("");
+  useEffect(() => {
+    setBusinessForm({
+      sku_prefix: business.sku_prefix,
+      sku_start: String(business.sku_start),
+      theme: business.theme || "dark",
+      min_buy_profit: String(business.min_buy_profit ?? 5),
+      min_buy_margin: String(business.min_buy_margin ?? 25),
+      monthly_revenue_target: business.monthly_revenue_target == null ? "" : String(business.monthly_revenue_target),
+      monthly_profit_target: business.monthly_profit_target == null ? "" : String(business.monthly_profit_target),
+      monthly_sold_target: business.monthly_sold_target == null ? "" : String(business.monthly_sold_target),
+      monthly_listed_target: business.monthly_listed_target == null ? "" : String(business.monthly_listed_target),
+    });
+  }, [business]);
   const nextSku = useMemo(() => {
     const prefix = businessForm.sku_prefix.toUpperCase();
     const numbers = items
@@ -1963,9 +2113,19 @@ function SettingsPage({
       .filter(Number.isFinite);
     return `${prefix}${String((numbers.length ? Math.max(...numbers) : Number(businessForm.sku_start) - 1) + 1).padStart(3, "0")}`;
   }, [businessForm.sku_prefix, businessForm.sku_start, items]);
+  const orderedPlatforms = useMemo(
+    () =>
+      [...platforms].sort((a, b) => {
+        const aIndex = platformOrder.indexOf(a.name);
+        const bIndex = platformOrder.indexOf(b.name);
+        return (aIndex === -1 ? 999 : aIndex) - (bIndex === -1 ? 999 : bIndex) || a.name.localeCompare(b.name);
+      }),
+    [platforms],
+  );
 
   const saveBusinessSettings = async () => {
-    await supabase.from("businesses").update({
+    setSaveMessage("");
+    const { error } = await supabase.from("businesses").update({
       sku_prefix: businessForm.sku_prefix.toUpperCase(),
       sku_start: Number(businessForm.sku_start) || 1,
       theme: businessForm.theme,
@@ -1976,6 +2136,12 @@ function SettingsPage({
       monthly_sold_target: businessForm.monthly_sold_target ? Number(businessForm.monthly_sold_target) : null,
       monthly_listed_target: businessForm.monthly_listed_target ? Number(businessForm.monthly_listed_target) : null,
     }).eq("id", business.id);
+    if (error) {
+      setSaveMessage(`Could not save settings: ${error.message}`);
+      return;
+    }
+    document.documentElement.dataset.theme = businessForm.theme;
+    setSaveMessage("Settings saved.");
     onRefresh();
   };
 
@@ -1995,7 +2161,10 @@ function SettingsPage({
         <div className="form-grid two">
           <Field label="SKU prefix" value={businessForm.sku_prefix} onChange={(v) => setBusinessForm({ ...businessForm, sku_prefix: v })} />
           <Field label="SKU start number" value={businessForm.sku_start} onChange={(v) => setBusinessForm({ ...businessForm, sku_start: v })} type="number" />
-          <SelectField label="Theme" value={businessForm.theme} onChange={(v) => setBusinessForm({ ...businessForm, theme: v })} options={["dark", "light"]} />
+          <SelectField label="Theme" value={businessForm.theme} onChange={(v) => {
+            document.documentElement.dataset.theme = v;
+            setBusinessForm({ ...businessForm, theme: v });
+          }} options={["dark", "light"]} />
         </div>
         <div className="setup-note">Next SKU preview: <strong>{nextSku}</strong></div>
       </section>
@@ -2017,12 +2186,13 @@ function SettingsPage({
           <Field label="Listed items target" value={businessForm.monthly_listed_target} onChange={(v) => setBusinessForm({ ...businessForm, monthly_listed_target: v })} type="number" />
         </div>
         <button className="primary-button" onClick={saveBusinessSettings}>Save business settings</button>
+        {saveMessage && <p className={saveMessage.startsWith("Could") ? "decision-text bad" : "decision-text good"}>{saveMessage}</p>}
       </section>
       <section className="panel">
         <p className="eyebrow">Profit settings</p>
         <h2>Platform fees</h2>
         <div className="platform-grid">
-          {platforms.map((platform) => (
+          {orderedPlatforms.map((platform) => (
             <div className="platform-card" key={platform.id}>
               <h3>{platform.name}</h3>
               <Field label="Fee %" value={String(platform.fee_percent)} onChange={(v) => updatePlatform(platform, "fee_percent", v)} type="number" />
