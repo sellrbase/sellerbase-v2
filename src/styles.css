@@ -433,7 +433,7 @@ h2 {
 .quick-grid,
 .platform-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
   gap: 12px;
 }
 
@@ -444,6 +444,17 @@ h2 {
   background: var(--panel-2);
   color: var(--text);
   padding: 15px;
+}
+
+.platform-card {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+
+.platform-card h3 {
+  margin: 0;
+  font-size: 18px;
 }
 
 .quick-card {
@@ -730,10 +741,11 @@ h2 {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 14px 0;
+  padding: 16px;
   margin-bottom: 14px;
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel-2);
 }
 
 .profit-preview span {
@@ -743,6 +755,41 @@ h2 {
 .profit-preview strong {
   color: var(--green);
   font-size: 24px;
+}
+
+.profit-preview.neutral strong {
+  color: var(--muted);
+}
+
+.profit-preview.good {
+  border-color: rgba(74, 222, 128, 0.35);
+  background: rgba(74, 222, 128, 0.08);
+}
+
+.profit-preview.bad {
+  border-color: rgba(251, 113, 133, 0.38);
+  background: rgba(251, 113, 133, 0.08);
+}
+
+.profit-preview.bad strong {
+  color: var(--red);
+}
+
+.decision-text {
+  margin: 0;
+  font-weight: 800;
+}
+
+.decision-text.neutral {
+  color: var(--muted);
+}
+
+.decision-text.good {
+  color: var(--green);
+}
+
+.decision-text.bad {
+  color: var(--red);
 }
 
 .setup-note {
@@ -756,6 +803,17 @@ h2 {
   border-radius: 10px;
   color: var(--text);
   background: rgba(244, 185, 66, 0.09);
+}
+
+.button-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.button-row.compact {
+  gap: 8px;
 }
 
 .target-grid {
